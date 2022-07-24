@@ -5,6 +5,7 @@ from flask import Flask, request
 
 app = Flask(__name__)
 
+
 snowflake_username ='Mohanamsi'
 snowflake_password ='M0hanamsi'
 snowflake_account ='KT12090.us-east-2.aws'
@@ -22,29 +23,37 @@ conn = sf.connect(user=snowflake_username,
 
 
 def run_query(connection, query):
+    global cursor
+    print(connection,query)
     cursor = connection.cursor()
     cursor.execute(query)
-    cursor.close()
+    # cursor.close()
 
 
 try:
     warehouse_sql = 'use warehouse {}'.format(snowflake_warehouse)
     run_query(conn, warehouse_sql)
+    print("ware")
 
-    try:
-        sql = 'alter warehouse {} resume'.format(snowflake_warehouse)
-        run_query(conn, sql)
-    except:
-        pass
+    # try:
+    #     sql = 'alter warehouse {} resume'.format(snowflake_warehouse)
+    #     run_query(conn, sql)
+    #     print("sql ware")
+    # except:
+    #     pass
 
     sql = 'use database {}'.format(database_name)
     run_query(conn, sql)
+    print("data")
 
     sql = 'use role {}'.format(snowflake_role)
     run_query(conn, sql)
+    print("role")
 
     sql = f'use schema {schema_name}'
     run_query(conn, sql)
+    print("schema")
+
 
 except Exception as e:
     print(e)
@@ -54,7 +63,15 @@ def lineitem_data(shipmode, conn):
     sql = f"""select * 
             from LINEITEM
             where upper(L_SHIPMODE) = upper('{shipmode}') limit 200 ;"""
-    df = pd.read_sql(sql, conn)
+
+    run_query(conn,sql)
+    df= pd.DataFrame(cursor.fetchall())
+    df.columns = [i.name for i in cursor.description]
+
+    print(df.columns)
+
+    # df = pd.read_sql(sql, conn)  # internally runs the cursor.excute.
+
     # data processing
     # Fetch only those records who have Quantity greater than 30
     df_processed = df[df['L_QUANTITY'] > 30]
@@ -74,7 +91,7 @@ def api_fun():
     if request.method == 'POST':
         input_condition = request.get_json()
         if 'mode' in input_condition.keys():
-            value = str(input_condition['mode'])
+            value = str(input_condition['mode']).upper()
             result = lineitem_data(value, conn)
         else:
             return "Error : No shipmode field is provided. Please specify a shipmode to filter the data."
